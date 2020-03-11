@@ -375,8 +375,8 @@ class DeepSpeedConfig(object):
                                    ':'))))
 
     def _do_error_check(self):
-        if self.zero_enabled:
-            assert self.fp16_enabled, "DeepSpeedConfig: ZeRO is only supported if fp16 is enabled"
+        #if self.zero_enabled:
+        #    assert self.fp16_enabled, "DeepSpeedConfig: ZeRO is only supported if fp16 is enabled"
 
         assert self.train_micro_batch_size_per_gpu, "DeepSpeedConfig: {} is not defined".format(TRAIN_MICRO_BATCH_SIZE_PER_GPU)
 
@@ -384,10 +384,10 @@ class DeepSpeedConfig(object):
             GRADIENT_ACCUMULATION_STEPS)
 
     def _do_warning_check(self):
-        fp16_enabled = self.fp16_enabled or self.zero_enabled
-        if self.gradient_clipping > 0. and not fp16_enabled:
+        fp16_or_zero_enabled = self.fp16_enabled or self.zero_enabled
+        if self.gradient_clipping > 0. and not fp16_or_zero_enabled:
             logging.warning(
-                'DeepSpeedConfig: gradient clipping enabled without FP16 enabled.')
+                'DeepSpeedConfig: gradient clipping enabled without FP16 or ZeRO enabled.')
 
         vocabulary_size = self._param_dict.get(VOCABULARY_SIZE, VOCABULARY_SIZE_DEFAULT)
         if vocabulary_size and vocabulary_size % TENSOR_CORE_ALIGN_SIZE != 0:
@@ -399,9 +399,9 @@ class DeepSpeedConfig(object):
         if self.optimizer_params is not None and \
             MAX_GRAD_NORM in self.optimizer_params.keys() and \
                 self.optimizer_params[MAX_GRAD_NORM] > 0:
-            if fp16_enabled:
+            if fp16_or_zero_enabled:
                 logging.warning(
-                    'DeepSpeedConfig: In FP16 mode, DeepSpeed will pass {}:{} to FP16 wrapper'
+                    'DeepSpeedConfig: In FP16 mode or ZeRO mode, DeepSpeed will pass {}:{} to FP16 wrapper'
                     .format(MAX_GRAD_NORM,
                             self.optimizer_params[MAX_GRAD_NORM]))
             else:

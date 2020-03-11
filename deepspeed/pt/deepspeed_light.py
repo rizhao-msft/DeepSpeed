@@ -12,6 +12,7 @@ from tensorboardX import SummaryWriter
 
 from deepspeed.pt.deepspeed_timer import ThroughputTimer, SynchronizedWallClockTimer
 from deepspeed.pt.deepspeed_zero_optimizer import FP16_DeepSpeedZeroOptimizer
+from deepspeed.pt.deepspeed_zero_optimizer_fp32 import FP32_DeepSpeedZeroOptimizer
 
 from deepspeed.pt.fp16_optimizer import FP16_Optimizer
 from deepspeed.pt.fp16_unfused_optimizer import FP16_UnfusedOptimizer
@@ -445,7 +446,10 @@ class DeepSpeedLight(Module):
         logging.info('DeepSpeed Basic Optimizer = {}'.format(basic_optimizer))
 
         if self.zero_optimization() and self.optimizer_name() == ADAM_OPTIMIZER:
-            self.optimizer = self._configure_zero_optimizer(basic_optimizer)
+            if self.fp16_enabled():
+                self.optimizer = self._configure_fp16_zero_optimizer(basic_optimizer)
+            else:
+                self.optimizer = self._configure_fp32_zero_optimizer(basic_optimizer)
         elif self.fp16_enabled():
             self.optimizer = self._configure_fp16_optimizer(basic_optimizer)
         else:
@@ -455,8 +459,13 @@ class DeepSpeedLight(Module):
 
     def _configure_basic_optimizer(self, model_parameters):
         optimizer_parameters = self.optimizer_params()
+        # RZ: Not sure why enabling fp16 disables max_grad_norm,
+        # but I'm doing the same for fp32 ZeRO
         if self.fp16_enabled() and 'max_grad_norm' in optimizer_parameters.keys():
             optimizer_parameters['max_grad_norm'] = 0.0
+        if self.zero_optimization() and 'max_grad_norm' in optimizer_parameters.keys():
+            optimizer_parameters['max_grad_norm'] = 0.0
+
         if self.optimizer_name() == ADAM_OPTIMIZER:
             optimizer = FusedAdam(model_parameters, **optimizer_parameters)
         elif self.optimizer_name() == LAMB_OPTIMIZER:
@@ -503,9 +512,24 @@ class DeepSpeedLight(Module):
 
         return optimizer
 
-    def _configure_zero_optimizer(self, optimizer):
+    def _configure_fp16_zero_optimizer(self, optimizer):
         logging.info('Creating fp16 zero optimizer')
         optimizer = FP16_DeepSpeedZeroOptimizer(
+            optimizer,
+            static_loss_scale=self.loss_scale(),
+            dynamic_loss_scale=self.dynamic_loss_scale(),
+            dynamic_loss_args=self.dynamic_loss_scale_args(),
+            dp_process_group=self.data_parallel_group,
+            clip_grad=self.gradient_clipping(),
+            all_gather_partitions=not self.disable_allgather(),
+            allgather_size=self.allgather_size(),
+            mpu=self.mpu)
+
+        return optimizer
+
+    def _configure_fp32_zero_optimizer(self, optimizer):
+        logging.info('Creating fp32 zero optimizer')
+        optimizer = FP32_DeepSpeedZeroOptimizer(
             optimizer,
             static_loss_scale=self.loss_scale(),
             dynamic_loss_scale=self.dynamic_loss_scale(),
