@@ -116,8 +116,9 @@ else
   PIP_SUDO=""
 fi
 
-# Read the $PIP env var
+# Read the $PIP and $PYTHON env vars
 PIP=${PIP:-pip}
+PYTHON=${PYTHON:-python}
 
 if [ "$pip_mirror" != "" ]; then
   PIP_INSTALL="$PIP install -i $pip_mirror"
@@ -151,24 +152,24 @@ if [ "$third_party_install" == "1" ]; then
         git checkout $apex_commit
     fi
 
-    python setup.py --cpp_ext --cuda_ext bdist_wheel
+    $PYTHON setup.py --cpp_ext --cuda_ext bdist_wheel
     cd -
 
     echo "Installing apex locally so that deepspeed will build"
-    $PIP_SUDO pip uninstall -y apex
+    $PIP_SUDO $PIP uninstall -y apex
     $PIP_SUDO $PIP_INSTALL third_party/apex/dist/apex*.whl
 fi
 if [ "$deepspeed_install" == "1" ]; then
     echo "Building deepspeed wheel"
-    python setup.py bdist_wheel
+    $PYTHON setup.py bdist_wheel
 fi
 
 if [ "$local_only" == "1" ]; then
     if [ "$deepspeed_install" == "1" ]; then
         echo "Installing deepspeed"
-        $PIP_SUDO pip uninstall -y deepspeed
+        $PIP_SUDO $PIP uninstall -y deepspeed
         $PIP_SUDO $PIP_INSTALL dist/deepspeed*.whl
-        python -c 'import deepspeed; print("deepspeed info:", deepspeed.__version__, deepspeed.__git_branch__, deepspeed.__git_hash__)'
+        $PYTHON -c 'import deepspeed; print("deepspeed info:", deepspeed.__version__, deepspeed.__git_branch__, deepspeed.__git_hash__)'
         echo "Installation is successful"
     fi
 else
@@ -188,17 +189,17 @@ else
         pdsh -w $hosts "$PIP_SUDO $PIP_INSTALL -r ${tmp_wheel_path}/requirements.txt"
     fi
     if [ "$third_party_install" == "1" ]; then
-        pdsh -w $hosts "$PIP_SUDO pip uninstall -y apex"
+        pdsh -w $hosts "$PIP_SUDO $PIP uninstall -y apex"
         pdcp -w $hosts third_party/apex/dist/apex*.whl $tmp_wheel_path/
         pdsh -w $hosts "$PIP_SUDO $PIP_INSTALL $tmp_wheel_path/apex*.whl"
-        pdsh -w $hosts 'python -c "import apex"'
+        pdsh -w $hosts '$PYTHON -c "import apex"'
     fi
     if [ "$deepspeed_install" == "1" ]; then
         echo "Installing deepspeed"
-        pdsh -w $hosts "$PIP_SUDO pip uninstall -y deepspeed"
+        pdsh -w $hosts "$PIP_SUDO $PIP uninstall -y deepspeed"
         pdcp -w $hosts dist/deepspeed*.whl $tmp_wheel_path/
         pdsh -w $hosts "$PIP_SUDO $PIP_INSTALL $tmp_wheel_path/deepspeed*.whl"
-        pdsh -w $hosts "python -c 'import deepspeed; print(\"deepspeed info:\", deepspeed.__version__, deepspeed.__git_branch__, deepspeed.__git_hash__)'"
+        pdsh -w $hosts "$PYTHON -c 'import deepspeed; print(\"deepspeed info:\", deepspeed.__version__, deepspeed.__git_branch__, deepspeed.__git_hash__)'"
         echo "Installation is successful"
     fi
     pdsh -w $hosts "if [ -d $tmp_wheel_path ]; then rm $tmp_wheel_path/*.whl $tmp_wheel_path/requirements.txt; rmdir $tmp_wheel_path; fi"
