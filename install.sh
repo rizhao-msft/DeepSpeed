@@ -116,12 +116,16 @@ else
   PIP_SUDO=""
 fi
 
+# Read the $PIP env var
+PIP=${PIP:-pip}
+
 if [ "$pip_mirror" != "" ]; then
-  PIP_INSTALL="pip install -i $pip_mirror"
+  PIP_INSTALL="$PIP install -i $pip_mirror"
 else
-  PIP_INSTALL="pip install"
+  PIP_INSTALL="$PIP install"
 fi
 
+echo "Using pip=$PIP_INSTALL"
 
 if [ ! -f $hostfile ]; then
         echo "No hostfile exists at $hostfile, installing locally"
